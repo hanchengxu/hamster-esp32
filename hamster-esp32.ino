@@ -15,11 +15,15 @@
 //引脚定义
 #define DHTPIN 14 //dht11 温湿度读取引脚
 #define DHTTYPE DHT11
-#define LM35PIN 36 //lm35 温度传感器引脚
+
 #define OLED_SDA 21
 #define OLED_SCL 22
+#define LM35PIN 36 //lm35 温度传感器引脚
 #define SERVOPIN 18//喂食舵机引脚
 #define SpeadPonit 4 //读取跑圈数字接口
+
+#define FEED_ONE 16 //喂食继电器1
+#define FEED_TWO 17 //喂食继电器2
 
 //对象声明
 DHT dht(DHTPIN, DHTTYPE);//dht对象
@@ -41,7 +45,6 @@ float endTime = 0; //用于计算平均速度
 float notRunTime = 0; //用于识别处于未转动状态，超过1 秒则结束一次平均速度计算
 boolean calSpeedFlg = false;//计算平均速度flg
 float singleSpeed = 0.0; //实时平均速度★
-float maxSingleSpeed = 0.0;//最大运动速度
 //---------------计算速度全局变量-----------------------
 
 
@@ -66,11 +69,18 @@ void callback(String topic, byte* payload, unsigned int length) {
         return;
       }
     
-      int openAngle = doc["open"];
-      int closeAngle = doc["close"];
-      servo1.write(openAngle);
-      delay(500);
-      servo1.write(closeAngle);
+      int feedRunTime = doc["runTime"];
+      
+      digitalWrite(FEED_ONE, HIGH);
+      digitalWrite(FEED_TWO, LOW);
+      delay(1000);
+  
+      digitalWrite(FEED_ONE, LOW);
+      digitalWrite(FEED_TWO, HIGH);
+      delay(1000*feedRunTime);
+  
+      digitalWrite(FEED_ONE, HIGH);
+      digitalWrite(FEED_TWO, HIGH);
   }
 }
 
@@ -123,7 +133,7 @@ void taskOne(void *parameter){
       //wifi重连
       WiFi.begin(ssid, password);
       while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
+        vTaskDelay(1000);
       }
     }
   
@@ -164,15 +174,6 @@ void taskOne(void *parameter){
       strcat(totalRun_char, " m");
       display.print(totalRun_char);
     }
-
-    //最大速度
-    display.setCursor(1, 35);
-    display.print("Speed(MAX):");
-    display.setCursor(67, 38);
-    char maxSpeed_char[5];
-    dtostrf(maxSingleSpeed, 1, 1, maxSpeed_char);
-    strcat(maxSpeed_char, " m/s");
-    display.print(maxSpeed_char);
     
     //实时速度
     display.setCursor(1, 46);
@@ -195,19 +196,18 @@ void taskOne(void *parameter){
    vTaskDelete(NULL);
 }
 
-//每分钟执行
+//每2分钟执行
 void taskTwo(void *parameter){
   while(1){
     //30s 前总圈数
     int currLapCount = lapCount;
     //等待一分钟
-    vTaskDelay(1000*60);
+    vTaskDelay(1000*60*2);
     //如果一分钟后总圈数大于一分钟前
     if(currLapCount < lapCount){
       //通过mqtt 发送总圈数到服务器
       String payload = "{\"msg\":[1,#lapCount]}";
       payload.replace("#lapCount",String(lapCount));
-//      Serial.println(payload);
       int len= payload.length()+1;
       char char_array[len];
       payload.toCharArray(char_array,len);
@@ -217,11 +217,19 @@ void taskTwo(void *parameter){
   vTaskDelete(NULL);
 }
 
+
 //主函数初始化
 void setup()
 {
   
   Serial.begin(115200);
+  //喂食继电器引脚
+  pinMode(FEED_ONE, OUTPUT);
+  pinMode(FEED_TWO, OUTPUT);
+
+  digitalWrite(FEED_ONE, HIGH);
+  digitalWrite(FEED_TWO, HIGH);
+  
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
@@ -275,7 +283,7 @@ void setup()
   xTaskCreatePinnedToCore(
     taskOne,   /* Task function. */
     "TaskOne", /* String with name of task. */
-    10000,     /* Stack size in bytes. */
+    15000,     /* Stack size in bytes. */
     NULL,      /* Parameter passed as input of the task */
     1,         /* Priority of the task. */
     NULL,      /* Task handle. */
@@ -285,12 +293,12 @@ void setup()
   xTaskCreatePinnedToCore(
     taskTwo,   /* Task function. */
     "TaskTwo", /* String with name of task. */
-    10000,     /* Stack size in bytes. */
+    15000,     /* Stack size in bytes. */
     NULL,      /* Parameter passed as input of the task */
     1,         /* Priority of the task. */
     NULL,      /* Task handle. */
-    0          /* Task Core. */
-    );  
+    1          /* Task Core. */
+    );
 }
 
 void loop()
@@ -328,9 +336,6 @@ void loop()
           float tempT = millis();
           float useTime = (tempT - notRunTime) / 1000.0;
           singleSpeed = Perimeter / useTime;
-          if(maxSingleSpeed<singleSpeed){
-            maxSingleSpeed = singleSpeed;
-          }
         }
       }
     }
@@ -357,15 +362,6 @@ void loop()
     
 //  Serial.print("内存：");
 //  Serial.println(ESP.getFreeHeap());
-//  for (pos = 0; pos <= 180; pos += 1) { // sweep from 0 degrees to 180 degrees
-//    // in steps of 1 degree
-//    servo1.write(pos);
-//    delay(2);             // waits 20ms for the servo to reach the position
-//  }
-//
-//  for (pos = 180; pos >= 0; pos -= 1) { // sweep from 180 degrees to 0 degrees
-//    servo1.write(pos);
-//    delay(2);
-//  }
+
   delay(10);
 }
