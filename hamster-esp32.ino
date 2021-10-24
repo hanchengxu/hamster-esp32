@@ -29,6 +29,10 @@
 #define FEED_ONE 16 //喂食继电器1
 #define FEED_TWO 17 //喂食继电器2
 
+//从esp32 广播的mqtt主题定义
+#define T_ACTIVE "t_active"
+#define T_T_AND_H "t_temperature_and_humidity"
+
 //对象声明
 DHT dht(DHTPIN, DHTTYPE);//dht对象
 WiFiClient espClient;//wifi对象
@@ -37,8 +41,6 @@ Servo servo1;//喂食舵机
 Adafruit_SSD1306 display(128, 64, &Wire, -1);//oled显示屏
 medianFilter Filter;
 
-int pos = 0;//喂食舵机初始位置
-
 //---------------计算速度全局变量-----------------------
 int lastSts = 1; //default 1
 long lapCount = 0;//总圈数★
@@ -46,6 +48,12 @@ float totalRun = 0.0; //总里程★
 float tempTime1 = 0.0; // 长期处于识别区超时
 float endTime = 0; //用于计算平均速度
 //---------------计算速度全局变量-----------------------
+
+//---------------环境温湿度等全局变量-------------------
+int caseT = 0;  //环境温度
+int caseH = 0; //环境湿度
+int heaterT = 0; //加热垫温度
+//---------------环境温湿度等全局变量-------------------
 
 
 //mqtt回调函数
@@ -93,9 +101,9 @@ void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
+    // Create a client ID
+    String clientId = "ESP32Client-1";
+//    clientId += String(random(0xffff), HEX);
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
@@ -145,13 +153,21 @@ void taskOne(void *parameter) {
     display.print("T:");
     display.setCursor(15, 15);
     int t = dht.readTemperature();
-    if (t < 100) {
+    //环境温度发生变化，则更新全局变量 caseT
+    if (t !=2147483647 && caseT != t ) {
       char t_char[6];
       dtostrf(t, 2, 0, t_char);
-      display.print(t_char);
-    } else {
-      display.print("--");
+      caseT= t;
+      //mqtt通信
+      String payload = "{\"msg\":{\"hamsterId\":1,\"caseT\":";
+      payload.concat(caseT);
+      payload.concat("}}");
+      int len = payload.length() + 1;
+      char char_array[len];
+      payload.toCharArray(char_array, len);
+      client.publish(T_T_AND_H,char_array);
     }
+    display.print(caseT);
 
     //加热垫温度
     display.setCursor(30, 15);
@@ -159,7 +175,19 @@ void taskOne(void *parameter) {
     float LM35_Raw_Sensor = analogRead(LM35PIN);
     float voltage = readADC_Cal(LM35_Raw_Sensor);
     display.setCursor(34, 15);
-    display.print(String(Filter.run(voltage / 10)));
+    int temp_t = int(Filter.run(voltage / 10));
+    if(temp_t != heaterT){
+     heaterT = temp_t;
+     //mqtt通信
+     String payload = "{\"msg\":{\"hamsterId\":1,\"heaterT\":";
+     payload.concat(heaterT);
+     payload.concat("}}");
+     int len = payload.length() + 1;
+     char char_array[len];
+     payload.toCharArray(char_array, len);
+     client.publish(T_T_AND_H,char_array);
+    }
+    display.print(String(heaterT));
     display.setCursor(45, 15);
     display.print(")");
 
@@ -181,14 +209,22 @@ void taskOne(void *parameter) {
     display.setCursor(1, 25);
     display.print("H:");
     display.setCursor(15, 25);
-    int h = dht.readHumidity();
-    if (h < 100) {
+    int h = Filter.run(dht.readHumidity());
+    //环境湿度发生变化，则更新全局变量 caseH
+    if ( h != 2147483647 && caseH != h ) {
       char h_char[6];
       dtostrf(h, 2, 0, h_char);
-      display.print(h_char);
-    } else {
-      display.print("--");
+      caseH= h;
+      //mqtt通信
+      String payload = "{\"msg\":{\"hamsterId\":1,\"caseH\":";
+      payload.concat(caseH);
+      payload.concat("}}");
+      int len = payload.length() + 1;
+      char char_array[len];
+      payload.toCharArray(char_array, len);
+      client.publish(T_T_AND_H,char_array);
     }
+    display.print(caseH);
 
     //总里程
     display.setCursor(1, 35);
@@ -337,10 +373,11 @@ void loop()
 
   //一圈识别结束
   if (lastSts == 0 && currSts == 1 ) {
-    //用于识别区超时，理论上状态跃迁是[1,1][1,0][0,0][0,0][0,1][1,1]
-    //                                 |              |
-    //                                 ----------------
-    //                                 tempTime2- tempTime1
+    //用于判断识别区域超时(长时间停留在识别区域)
+    //理论上状态跃迁是[1,1][1,0][0,0][0,0][0,1][1,1]
+    //                    |              |
+    //                    ----------------
+    //                    tempTime2- tempTime1
     float tempTime2 = millis();
 
     //超时条件，如果一直处于识别区域超过1秒，则重置lastSts
