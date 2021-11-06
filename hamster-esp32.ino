@@ -153,8 +153,8 @@ void taskOne(void *parameter) {
     display.print("T:");
     display.setCursor(15, 15);
     int t = dht.readTemperature();
-    //环境温度发生变化，则更新全局变量 caseT
-    if (t !=2147483647 && caseT != t ) {
+    //环境温度发生变化超过1度，则更新全局变量 caseT
+    if (t !=2147483647 && caseT != t && abs(caseT - t)>1 ) {
       char t_char[6];
       dtostrf(t, 2, 0, t_char);
       caseT= t;
@@ -176,7 +176,7 @@ void taskOne(void *parameter) {
     float voltage = readADC_Cal(LM35_Raw_Sensor);
     display.setCursor(34, 15);
     int temp_t = int(Filter.run(voltage / 10));
-    if(temp_t != heaterT){
+    if(temp_t != heaterT && abs(heaterT - temp_t)>1){
      heaterT = temp_t;
      //mqtt通信
      String payload = "{\"msg\":{\"hamsterId\":1,\"heaterT\":";
@@ -191,27 +191,14 @@ void taskOne(void *parameter) {
     display.setCursor(45, 15);
     display.print(")");
 
-    //压力传感器 食盆儿 Filter.run()
-//    int WEIGHT_Raw_Sensor = FilterOne(analogRead(WEIGHT_PIN));
-//    float new_voltage = readADC_Cal(WEIGHT_Raw_Sensor);
-//    float temp = 1000000 / (((3300 - new_voltage) * 10000) / new_voltage);
-//    float gam = 0;
-//    if (temp <= 1000) {
-//      gam = temp / 80;
-//    } else {
-//      gam = temp - 1000;
-//      gam /= 30;
-//    }
-//    Serial.print((gam * 1000) / 9.8);
-//    Serial.println();
 
     //环境湿度
     display.setCursor(1, 25);
     display.print("H:");
     display.setCursor(15, 25);
-    int h = Filter.run(dht.readHumidity());
-    //环境湿度发生变化，则更新全局变量 caseH
-    if ( h != 2147483647 && caseH != h ) {
+    int h = dht.readHumidity();
+    //环境湿度发生变化超过1度，则更新全局变量 caseH
+    if ( h != 2147483647 && caseH != h && abs(caseH - h)>1 ) {
       char h_char[6];
       dtostrf(h, 2, 0, h_char);
       caseH= h;
