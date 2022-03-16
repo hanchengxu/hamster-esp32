@@ -5,6 +5,9 @@ const char* password   = "wifi-password";
 
 //mqtt server
 const char* mqtt_server = "mqtt-server";
+const char* mqtt_client_id = "";
+const char* mqtt_username = "";
+const char* mqtt_password = "";
 
 
 float const PROGMEM  Perimeter  =0.502;//周长 单位m

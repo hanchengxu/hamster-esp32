@@ -105,7 +105,7 @@ void reconnect() {
     String clientId = "ESP32Client-1";
 //    clientId += String(random(0xffff), HEX);
     // Attempt to connect
-    if (client.connect(clientId.c_str())) {
+    if (client.connect(mqtt_client_id,mqtt_username,mqtt_password)) {
       Serial.println("connected");
       //订阅喂食
       client.subscribe("feedFood");
