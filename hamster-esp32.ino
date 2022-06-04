@@ -336,15 +336,15 @@ void setup()
     0          /* Task Core. */
   );
   //子任务设定
-  xTaskCreatePinnedToCore(
-    taskTwo,   /* Task function. */
-    "TaskTwo", /* String with name of task. */
-    15000,     /* Stack size in bytes. */
-    NULL,      /* Parameter passed as input of the task */
-    1,         /* Priority of the task. */
-    NULL,      /* Task handle. */
-    1          /* Task Core. */
-  );
+//  xTaskCreatePinnedToCore(
+//    taskTwo,   /* Task function. */
+//    "TaskTwo", /* String with name of task. */
+//    15000,     /* Stack size in bytes. */
+//    NULL,      /* Parameter passed as input of the task */
+//    1,         /* Priority of the task. */
+//    NULL,      /* Task handle. */
+//    1          /* Task Core. */
+//  );
 }
 
 void loop()
@@ -375,6 +375,11 @@ void loop()
       //未超时，总圈数增加
       lapCount++;
       totalRun = lapCount * Perimeter;
+       //通过mqtt 发送总圈数到服务器
+      String payload = "{\"hamsterId\":1}";
+      char char_array[18];
+      payload.toCharArray(char_array, 18);
+      client.publish("t_active", char_array);
     }
   }
 
