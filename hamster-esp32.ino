@@ -307,7 +307,7 @@ void setup()
     client -> setCACert(rootCACertificate);
     {
       HTTPClient http;
-      http.begin(web_server + "/getMaxLapCount?hamsterId=1",rootCACertificate); 
+      http.begin(web_server + "/api/noauth/getMaxLapCount?hamsterId=1",rootCACertificate); 
       int httpCode = http.GET();
       Serial.print("response coede:");
       Serial.println(httpCode);
